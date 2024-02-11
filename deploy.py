@@ -41,7 +41,7 @@ from tockloader.exceptions import TockLoaderException
 import tools.configure
 from tools.deploy_partition import create_metadata, load_priv_key, pad_to
 
-PROGRAMMERS = frozenset(("jlink", "openocd", "pyocd", "nordicdfu", "none"))
+PROGRAMMERS = frozenset(("jlink", "openocd", "pyocd", "nordicdfu", "nordicdfu_nrfutil_binary", "none"))
 
 # This structure allows us to support out-of-tree boards as well as (in the
 # future) more achitectures.
@@ -718,6 +718,14 @@ class OpenSKInstaller:
         fatal(("You need to install nrfutil python3 package v6.0 or above. "
                f"Found: v{nrfutil_version}. If you use Python >= 3.11, please "
                "try version 3.10."))
+    if self.args.programmer == "nordicdfu_nrfutil_binary":
+      assert_python_library("intelhex")
+      assert_mandatory_binary("nrfutil")
+      nrfutil_version = self.checked_command_output(["nrfutil", "--version"])
+      nrfutil_version = nrfutil_version.removeprefix("nrfutil ")
+      if not nrfutil_version.startswith("7."):
+          fatal("You need to install nrfutil binary 7.0 or above. "
+                f"Found:\n{nrfutil_version}\n")
       if not SUPPORTED_BOARDS[self.args.board].nordic_dfu:
         fatal("This board doesn't support flashing over DFU.")
 
@@ -794,7 +802,7 @@ class OpenSKInstaller:
                  "and the board are correct."))
           return 1
 
-    elif self.args.programmer in ("pyocd", "nordicdfu", "none"):
+    elif self.args.programmer in ("pyocd", "nordicdfu", "nordicdfu_nrfutil_binary", "none"):
       dest_file = f"{CARGO_TARGET_DIR}/{self.args.board}_merged.hex"
       os.makedirs(CARGO_TARGET_DIR, exist_ok=True)
       self.create_hex_file(dest_file)
@@ -805,7 +813,7 @@ class OpenSKInstaller:
             "pyocd", "flash", f"--target={board_props.pyocd_target}",
             "--format=hex", "--erase=auto", dest_file
         ])
-      if self.args.programmer == "nordicdfu":
+      if self.args.programmer in ("nordicdfu", "nordicdfu_nrfutil_binary"):
         info("Creating DFU package")
         dfu_pkg_file = f"{CARGO_TARGET_DIR}/{self.args.board}_dfu.zip"
         self.checked_command([
